@@ -92,7 +92,7 @@ const RADII = [
   {label:'4 km', r:4000},
   {label:'Trên 4km', r:10000},
 ];
-const EPS = ['https://overpass-api.de/api/interpreter','https://overpass.kumi.systems/api/interpreter'];
+const EPS = ['https://overpass.kumi.systems/api/interpreter','https://overpass-api.de/api/interpreter'];
 
 let pos = null, cat = 'food', radIdx = 2;
 let map = null, layer = null, userMarker = null, mapOK = false;
@@ -153,14 +153,14 @@ function fmtD(km, min10){
 function buildQL(){
   const R = RADII[radIdx].r;
   const f = CATS[cat].q.map(t=>`  ${t}(around:${R},${pos.lat},${pos.lon});`).join('\n');
-  return `[out:json][timeout:25];\n(\n${f}\n);\nout center 40;`;
+  return `[out:json][timeout:40];\n(\n${f}\n);\nout center 40;`;
 }
 async function overpass(ql){
   let err;
   for(const ep of EPS){
     try{
       const ctl=new AbortController();
-      const to=setTimeout(()=>ctl.abort(),30000);
+      const to=setTimeout(()=>ctl.abort(),60000);
       const r=await fetch(ep,{method:'POST',signal:ctl.signal,
         headers:{'Content-Type':'application/x-www-form-urlencoded'},
         body:'data='+encodeURIComponent(ql)});
@@ -230,19 +230,24 @@ async function search(){
     }).join('');
   }catch(e){
     console.error(e);
-    status('Không tải được dữ liệu (máy chủ bản đồ bận hoặc mạng chậm). Đợi 1 phút rồi bấm tìm lại, hoặc thử bán kính nhỏ hơn.');
-    $('results').innerHTML='<div class="loading">Lỗi tải dữ liệu. Thử lại sau ít phút.</div>';
+    status('Không tải được dữ liệu (máy chủ bản đồ quá tải hoặc mạng chậm). Bấm “Thử lại” hoặc thử bán kính nhỏ hơn.');
+    $('results').innerHTML='<div class="loading">Không tải được dữ liệu.<br><button class="pill active" id="retryBtn" style="margin-top:10px">🔄 Thử lại</button></div>';
+    const rb=$('retryBtn'); if(rb) rb.onclick=search;
   }
 }
 
 // ---- address autocomplete ----
 let debT=null;
-async function geocode(q, suggest){
-  const base='https://nominatim.openstreetmap.org/search?format=json&limit='+(suggest?5:5)+'&accept-language=vi&q=';
-  let r=await fetch(base+encodeURIComponent(q)+'&countrycodes=vn');
-  let j=await r.json();
-  if(!j.length){ r=await fetch(base+encodeURIComponent(q)); j=await r.json(); }
-  return j;
+async function geocode(q){
+  const ctl=new AbortController();
+  const to=setTimeout(()=>ctl.abort(),15000);
+  try{
+    const base='https://nominatim.openstreetmap.org/search?format=json&limit=5&accept-language=vi&q=';
+    let r=await fetch(base+encodeURIComponent(q)+'&countrycodes=vn',{signal:ctl.signal});
+    let j=await r.json();
+    if(!j.length){ r=await fetch(base+encodeURIComponent(q),{signal:ctl.signal}); j=await r.json(); }
+    return j;
+  }finally{ clearTimeout(to); }
 }
 function pickPlace(p){
   pos={lat:parseFloat(p.lat), lon:parseFloat(p.lon)};
