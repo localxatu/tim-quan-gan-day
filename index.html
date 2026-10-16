@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Các con vợ muốn đi đâu nào?</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<style>
+:root{--bg:#141a26;--card:#1e2637;--text:#f2f5fa;--muted:#93a0b8}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;max-width:640px;margin:0 auto;min-height:100vh}
+header{padding:22px 16px 8px;text-align:center}
+header h1{font-size:24px;line-height:1.35}
+.controls{padding:10px 16px 0}
+.row{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px}
+button{cursor:pointer;border:none;font-size:15px;font-family:inherit;transition:transform .08s ease, box-shadow .08s ease}
+button:active{transform:scale(.96)}
+.loc-btn{flex:1;padding:13px 16px;border-radius:16px;font-weight:800;color:#5b2333;
+  background:linear-gradient(135deg,#ffd9e8,#ffb3cd);box-shadow:0 4px 14px rgba(255,150,180,.35)}
+.addrbox{background:var(--card);border-radius:16px;padding:12px;margin-bottom:10px}
+.addrrow{display:flex;gap:8px}
+.addrrow input{flex:1;min-width:0;padding:11px 12px;border-radius:12px;border:1px solid #35415c;background:#141a26;color:var(--text);font-size:15px;font-family:inherit}
+.addrrow button{padding:11px 20px;border-radius:12px;font-weight:800;color:#3d2b12;flex-shrink:0;
+  background:linear-gradient(135deg,#ffe9b8,#ffd08a);box-shadow:0 4px 12px rgba(255,200,120,.3)}
+.sug{display:block;width:100%;text-align:left;background:#141a26;color:var(--text);border:1px solid #35415c;border-radius:10px;padding:10px;margin-top:8px;font-size:13px;line-height:1.5}
+.sug:active{background:#24304a}
+#addrSug{margin-top:2px}
+.chip{padding:10px 15px;border-radius:999px;font-weight:700;color:#3a3f5c;background:#e6e1f7;box-shadow:0 2px 8px rgba(0,0,0,.25)}
+.chip.active{color:#fff;background:linear-gradient(135deg,#b39df2,#8f7ae5);box-shadow:0 4px 14px rgba(150,120,240,.45)}
+.pill{padding:9px 15px;border-radius:999px;font-weight:700;font-size:14px;color:#23403a;background:#d9f2e4;box-shadow:0 2px 8px rgba(0,0,0,.25)}
+.pill.active{color:#fff;background:linear-gradient(135deg,#6fd3a7,#3fb985);box-shadow:0 4px 14px rgba(80,200,140,.45)}
+.lbl{color:var(--muted);font-size:13px;margin:2px 0 8px;width:100%}
+#status{padding:8px 16px;color:var(--muted);font-size:13px;min-height:36px;line-height:1.5}
+#map{height:300px;margin:0 16px;border-radius:16px;z-index:0}
+#mapFallback{display:none;margin:0 16px;background:var(--card);border-radius:16px;padding:20px;text-align:center;font-size:14px;color:var(--muted);line-height:1.7}
+#results{padding:12px 16px 40px}
+.item{background:var(--card);border-radius:16px;padding:14px;margin-bottom:10px}
+.item h3{font-size:16px;line-height:1.4}
+.item .dist{color:#ffb020;font-weight:800;font-size:14px;margin-top:3px}
+.item .meta{color:var(--muted);font-size:13px;margin:6px 0 10px;line-height:1.6}
+.item a.dir{display:inline-block;background:linear-gradient(135deg,#7db8ff,#4a90ff);color:#fff;text-decoration:none;font-weight:700;padding:9px 16px;border-radius:999px;font-size:14px;margin-right:8px;box-shadow:0 3px 10px rgba(90,150,255,.4)}
+.item a.gmap{display:inline-block;background:transparent;border:1px solid #4a5878;color:var(--text);text-decoration:none;padding:9px 16px;border-radius:999px;font-size:14px;font-weight:700}
+.loading{text-align:center;color:var(--muted);padding:24px;font-size:14px}
+footer{padding:0 16px 30px;color:var(--muted);font-size:12px;text-align:center;line-height:1.7}
+a{color:#ffb020}
+</style>
+</head>
+<body>
+<header>
+  <h1>Các con vợ muốn đi đâu nào? 🍜</h1>
+</header>
+
+<div class="controls">
+  <div class="row"><button class="loc-btn" id="locBtn">📍 Dùng vị trí của tôi</button></div>
+  <div class="addrbox">
+    <div class="lbl">Hoặc gõ địa chỉ / tên địa điểm:</div>
+    <div class="addrrow">
+      <input id="addrIn" type="text" placeholder="vd: Chợ Bến Thành…" autocomplete="off">
+      <button id="addrBtn">Tìm</button>
+    </div>
+    <div id="addrSug"></div>
+  </div>
+  <div class="lbl">Loại địa điểm:</div>
+  <div class="row" id="catRow"></div>
+  <div class="lbl">Bán kính:</div>
+  <div class="row" id="radRow"></div>
+</div>
+
+<div id="status">Bấm “Dùng vị trí của tôi” hoặc gõ địa chỉ để bắt đầu.</div>
+<div id="map"></div>
+<div id="mapFallback">Không tải được bản đồ (mạng chặn CDN).<br>Danh sách bên dưới vẫn xài được, bấm “Chỉ đường” để mở Google Maps.</div>
+<div id="results"></div>
+<footer>Dữ liệu: OpenStreetMap (cộng đồng đóng góp, có thể thiếu).<br>Mở bằng Chrome/Safari trên điện thoại hoặc máy tính.</footer>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script>
+const CATS = {
+  food:  {label:'Quán ăn', icon:'🍜', q:['nwr["amenity"="restaurant"]','nwr["amenity"="fast_food"]']},
+  cafe:  {label:'Cà phê', icon:'☕', q:['nwr["amenity"="cafe"]']},
+  fuel:  {label:'Cây xăng', icon:'⛽', q:['nwr["amenity"="fuel"]']},
+  pharmacy:{label:'Nhà thuốc', icon:'💊', q:['nwr["amenity"="pharmacy"]']},
+  atm:   {label:'ATM', icon:'🏧', q:['nwr["amenity"="atm"]']},
+  market:{label:'Siêu thị', icon:'🛒', q:['nwr["shop"="supermarket"]']},
+  conv:  {label:'Tiện lợi', icon:'🏪', q:['nwr["shop"="convenience"]','nwr["brand"="Circle K"]','nwr["brand"="FamilyMart"]','nwr["brand"="7-Eleven"]','nwr["brand"="Ministop"]','nwr["brand"="GS25"]','nwr["brand"="WinMart+"]','nwr["brand"="Winmart"]']},
+  charging:{label:'Sạc xe điện', icon:'🔋', q:['nwr["amenity"="charging"]']},
+};
+const RADII = [
+  {label:'Dưới 500m', r:500, min10:true},
+  {label:'1 km', r:1000},
+  {label:'2 km', r:2000},
+  {label:'3 km', r:3000},
+  {label:'4 km', r:4000},
+  {label:'Trên 4km', r:10000},
+];
+const EPS = ['https://overpass-api.de/api/interpreter','https://overpass.kumi.systems/api/interpreter'];
+
+let pos = null, cat = 'food', radIdx = 2;
+let map = null, layer = null, userMarker = null, mapOK = false;
+
+const $ = id => document.getElementById(id);
+const status = t => { $('status').innerHTML = t; };
+const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+const catRow = $('catRow');
+Object.entries(CATS).forEach(([k,v])=>{
+  const b=document.createElement('button');
+  b.className='chip'+(k===cat?' active':''); b.textContent=v.icon+' '+v.label;
+  b.onclick=()=>{cat=k;[...catRow.children].forEach(x=>x.classList.remove('active'));b.classList.add('active');search();};
+  catRow.appendChild(b);
+});
+const radRow = $('radRow');
+RADII.forEach((o,i)=>{
+  const b=document.createElement('button');
+  b.className='pill'+(i===radIdx?' active':''); b.textContent=o.label;
+  b.onclick=()=>{radIdx=i;[...radRow.children].forEach(x=>x.classList.remove('active'));b.classList.add('active');search();};
+  radRow.appendChild(b);
+});
+
+function ensureLeaflet(ok, fail){
+  if(window.L) return ok();
+  const s=document.createElement('script');
+  s.src='https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
+  s.onload=ok; s.onerror=fail;
+  document.head.appendChild(s);
+}
+function initMap(){
+  ensureLeaflet(()=>{
+    try{
+      map=L.map('map').setView([10.772,106.698],13);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
+        attribution:'© OpenStreetMap contributors', maxZoom:19
+      }).addTo(map);
+      layer=L.layerGroup().addTo(map);
+      mapOK=true;
+    }catch(e){ mapFail(); }
+  }, mapFail);
+}
+function mapFail(){ $('map').style.display='none'; $('mapFallback').style.display='block'; }
+
+function havKm(a,b,c,d){
+  const R=6371, r=Math.PI/180;
+  const dLa=(c-a)*r, dLo=(d-b)*r;
+  const h=Math.sin(dLa/2)**2+Math.cos(a*r)*Math.cos(c*r)*Math.sin(dLo/2)**2;
+  return 2*R*Math.asin(Math.sqrt(h));
+}
+function fmtD(km, min10){
+  const m = km*1000;
+  if(min10 && m < 10) return '10 m';
+  if(m < 1000) return Math.round(m)+' m';
+  return (m/1000).toFixed(1)+' km';
+}
+
+function buildQL(){
+  const R = RADII[radIdx].r;
+  const f = CATS[cat].q.map(t=>`  ${t}(around:${R},${pos.lat},${pos.lon});`).join('\n');
+  return `[out:json][timeout:25];\n(\n${f}\n);\nout center 40;`;
+}
+async function overpass(ql){
+  let err;
+  for(const ep of EPS){
+    try{
+      const ctl=new AbortController();
+      const to=setTimeout(()=>ctl.abort(),30000);
+      const r=await fetch(ep,{method:'POST',signal:ctl.signal,
+        headers:{'Content-Type':'application/x-www-form-urlencoded'},
+        body:'data='+encodeURIComponent(ql)});
+      clearTimeout(to);
+      if(!r.ok) throw new Error('HTTP '+r.status);
+      return await r.json();
+    }catch(e){ err=e; }
+  }
+  throw err;
+}
+
+async function search(){
+  if(!pos){ status('Chưa có vị trí. Bấm “Dùng vị trí của tôi” hoặc gõ địa chỉ bên dưới.'); return; }
+  const R = RADII[radIdx];
+  status(`Đang tìm ${CATS[cat].label.toLowerCase()} trong ${R.label.toLowerCase()}…`);
+  $('results').innerHTML='<div class="loading">Đang tải dữ liệu bản đồ…</div>';
+  try{
+    const data=await overpass(buildQL());
+    const seen=new Set();
+    const items=(data.elements||[]).map(e=>{
+      const key=e.type+':'+e.id;
+      if(seen.has(key)) return null;
+      seen.add(key);
+      const t=e.tags||{};
+      const la=e.lat??e.center?.lat, lo=e.lon??e.center?.lon;
+      if(la==null||lo==null) return null;
+      return {name:t.name||(CATS[cat].icon+' '+CATS[cat].label+' (chưa có tên)'),
+        lat:la, lon:lo, d:havKm(pos.lat,pos.lon,la,lo), tags:t};
+    }).filter(Boolean).sort((a,b)=>a.d-b.d).slice(0,30);
+
+    if(mapOK){
+      layer.clearLayers();
+      if(userMarker) userMarker.addTo(map);
+      else{
+        userMarker=L.circleMarker([pos.lat,pos.lon],{radius:8,color:'#1f6feb',fillColor:'#1f6feb',fillOpacity:1}).bindPopup('Vị trí của mày');
+        userMarker.addTo(map);
+      }
+      const bounds=[[pos.lat,pos.lon]];
+      items.forEach(it=>{
+        L.marker([it.lat,it.lon]).bindPopup(`<b>${esc(it.name)}</b><br>${fmtD(it.d,R.min10)}`).addTo(layer);
+        bounds.push([it.lat,it.lon]);
+      });
+      map.fitBounds(bounds,{padding:[30,30]});
+    }
+
+    if(!items.length){
+      $('results').innerHTML='<div class="loading">Không tìm thấy gì trong bán kính này. Thử nới bán kính ra.</div>';
+      status('Không có kết quả. Thử bán kính lớn hơn.');
+      return;
+    }
+    status(`Tìm thấy ${items.length} địa điểm gần nhất:`);
+    $('results').innerHTML=items.map(it=>{
+      const t=it.tags;
+      const meta=[
+        t.brand&&('Thương hiệu: '+t.brand),
+        t.cuisine&&('Món: '+t.cuisine),
+        t.opening_hours&&('Giờ: '+t.opening_hours),
+        t.phone&&('ĐT: '+t.phone),
+        t['addr:street']&&('ĐC: '+[t['addr:housenumber'],t['addr:street']].filter(Boolean).join(' '))
+      ].filter(Boolean).join('<br>');
+      const dir=`https://www.google.com/maps/dir/?api=1&destination=${it.lat},${it.lon}`;
+      const gq=`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(it.name)}`;
+      return `<div class="item"><h3>${esc(it.name)}</h3><div class="dist">${fmtD(it.d,R.min10)}</div>`+
+        (meta?`<div class="meta">${esc(meta).replace(/&lt;br&gt;/g,'<br>')}</div>`:'')+
+        `<a class="dir" target="_blank" rel="noopener" href="${dir}">🧭 Chỉ đường</a>`+
+        `<a class="gmap" target="_blank" rel="noopener" href="${gq}">Mở Google Maps</a></div>`;
+    }).join('');
+  }catch(e){
+    console.error(e);
+    status('Không tải được dữ liệu (máy chủ bản đồ bận hoặc mạng chậm). Đợi 1 phút rồi bấm tìm lại, hoặc thử bán kính nhỏ hơn.');
+    $('results').innerHTML='<div class="loading">Lỗi tải dữ liệu. Thử lại sau ít phút.</div>';
+  }
+}
+
+// ---- address autocomplete ----
+let debT=null;
+async function geocode(q, suggest){
+  const base='https://nominatim.openstreetmap.org/search?format=json&limit='+(suggest?5:5)+'&accept-language=vi&q=';
+  let r=await fetch(base+encodeURIComponent(q)+'&countrycodes=vn');
+  let j=await r.json();
+  if(!j.length){ r=await fetch(base+encodeURIComponent(q)); j=await r.json(); }
+  return j;
+}
+function pickPlace(p){
+  pos={lat:parseFloat(p.lat), lon:parseFloat(p.lon)};
+  $('addrIn').value=p.display_name.split(',').slice(0,2).join(',');
+  $('addrSug').innerHTML='';
+  status('Đã chọn: '+esc(p.display_name.split(',').slice(0,3).join(',')));
+  search();
+}
+function doAddrSearch(){
+  const q=$('addrIn').value.trim();
+  if(!q){ status('Nhập địa chỉ hoặc tên chỗ đã mày.'); return; }
+  status('Đang tìm địa chỉ…');
+  $('addrSug').innerHTML='<div class="loading">Đang tìm…</div>';
+  geocode(q,false).then(j=>{
+    if(!j.length){
+      $('addrSug').innerHTML='<div class="loading">Không tìm thấy. Thử ghi rõ hơn, vd thêm quận/huyện.</div>';
+      status('Không tìm thấy địa chỉ này.');
+      return;
+    }
+    pickPlace(j[0]);
+  }).catch(()=>{
+    $('addrSug').innerHTML='<div class="loading">Lỗi tìm địa chỉ. Thử lại sau.</div>';
+    status('Lỗi tìm địa chỉ.');
+  });
+}
+$('addrIn').addEventListener('input',()=>{
+  clearTimeout(debT);
+  const q=$('addrIn').value.trim();
+  if(q.length<3){ $('addrSug').innerHTML=''; return; }
+  debT=setTimeout(()=>{
+    geocode(q,true).then(j=>{
+      if($('addrIn').value.trim().length<3) return;
+      if(!j.length){ $('addrSug').innerHTML=''; return; }
+      $('addrSug').innerHTML=j.map((p,i)=>`<button class="sug" data-i="${i}">📍 ${esc(p.display_name)}</button>`).join('');
+      [...$('addrSug').children].forEach(b=>{ b.onclick=()=>pickPlace(j[+b.dataset.i]); });
+    }).catch(()=>{});
+  },450);
+});
+$('addrIn').addEventListener('keydown',e=>{ if(e.key==='Enter') doAddrSearch(); });
+$('addrBtn').onclick=doAddrSearch;
+document.addEventListener('click',e=>{
+  if(!$('addrSug').contains(e.target) && e.target.id!=='addrIn') $('addrSug').innerHTML='';
+});
+
+// ---- geolocation ----
+$('locBtn').onclick=()=>{
+  if(!navigator.geolocation){ status('Trình duyệt không hỗ trợ định vị. Gõ địa chỉ ở ô bên dưới.'); return; }
+  status('Đang lấy vị trí… nhớ bấm “Cho phép” khi trình duyệt hỏi.');
+  navigator.geolocation.getCurrentPosition(
+    p=>{ pos={lat:p.coords.latitude, lon:p.coords.longitude}; search(); },
+    e=>{ status('Không lấy được vị trí ('+(e.code===1?'mày đã chặn quyền':'lỗi GPS/timeout')+'). Gõ địa chỉ ở ô bên dưới.'); },
+    {enableHighAccuracy:true, timeout:15000, maximumAge:60000}
+  );
+};
+
+initMap();
+</script>
+</body>
+</html>
