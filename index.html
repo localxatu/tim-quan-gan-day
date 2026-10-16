@@ -92,7 +92,36 @@ const RADII = [
   {label:'4 km', r:4000},
   {label:'Trên 4km', r:10000},
 ];
-const EPS = ['https://overpass.kumi.systems/api/interpreter','https://overpass-api.de/api/interpreter'];
+const OVERPASS_EPS = [
+  {url:'https://overpass.kumi.systems/api/interpreter', ms:35000},
+  {url:'https://overpass-api.de/api/interpreter', ms:35000},
+  {url:'https://overpass.nchc.org.tw/api/interpreter', ms:25000},
+];
+async function overpass(ql, signal){
+  let err;
+  for(const ep of OVERPASS_EPS){
+    if(signal.aborted) throw new Error('aborted');
+    const ctl=new AbortController();
+    const to=setTimeout(()=>ctl.abort(),ep.ms);
+    const onAbort=()=>ctl.abort();
+    signal.addEventListener('abort',onAbort,{once:true});
+    try{
+      const r=await fetch(ep.url,{method:'POST',signal:ctl.signal,
+        headers:{'Content-Type':'application/x-www-form-urlencoded'},
+        body:'data='+encodeURIComponent(ql)});
+      clearTimeout(to);
+      signal.removeEventListener('abort',onAbort);
+      if(!r.ok) throw new Error('HTTP '+r.status);
+      return await r.json();
+    }catch(e){
+      clearTimeout(to);
+      signal.removeEventListener('abort',onAbort);
+      if(signal.aborted) throw new Error('aborted');
+      err=e;
+    }
+  }
+  throw err;
+}
 
 let pos = null, cat = 'food', radIdx = 2;
 let map = null, layer = null, userMarker = null, mapOK = false;
@@ -153,31 +182,15 @@ function fmtD(km, min10){
 function buildQL(){
   const R = RADII[radIdx].r;
   const f = CATS[cat].q.map(t=>`  ${t}(around:${R},${pos.lat},${pos.lon});`).join('\n');
-  return `[out:json][timeout:40];\n(\n${f}\n);\nout center 40;`;
+  return `[out:json][timeout:30];\n(\n${f}\n);\nout center 40;`;
 }
-async function overpass(ql){
-  let err;
-  for(const ep of EPS){
-    try{
-      const ctl=new AbortController();
-      const to=setTimeout(()=>ctl.abort(),60000);
-      const r=await fetch(ep,{method:'POST',signal:ctl.signal,
-        headers:{'Content-Type':'application/x-www-form-urlencoded'},
-        body:'data='+encodeURIComponent(ql)});
-      clearTimeout(to);
-      if(!r.ok) throw new Error('HTTP '+r.status);
-      return await r.json();
-    }catch(e){ err=e; }
-  }
-  throw err;
-}
-
 const cache=new Map();
 const cacheKey=()=>`${cat}|${RADII[radIdx].r}|${pos.lat.toFixed(3)}|${pos.lon.toFixed(3)}`;
 function cachePut(k,items){
   if(cache.size>20) cache.delete(cache.keys().next().value);
   cache.set(k,items);
 }
+let curSearchCtl=null;
 
 async function search(){
   if(!pos){ status('Chưa có vị trí. Bấm “Dùng vị trí của tôi” hoặc gõ địa chỉ bên dưới.'); return; }
@@ -189,10 +202,15 @@ async function search(){
     renderItems(items);
     return;
   }
+  if(curSearchCtl) curSearchCtl.abort();
+  const myCtl=new AbortController();
+  curSearchCtl=myCtl;
+  const sig=myCtl.signal;
   status(`Đang tìm ${CATS[cat].label.toLowerCase()} trong ${R.label.toLowerCase()}…`);
   $('results').innerHTML='<div class="loading">Đang tải dữ liệu bản đồ…</div>';
   try{
-    const data=await overpass(buildQL());
+    const data=await overpass(buildQL(), sig);
+    if(sig.aborted) return;
     const seen=new Set();
     const items=(data.elements||[]).map(e=>{
       const k=e.type+':'+e.id;
@@ -214,6 +232,7 @@ async function search(){
     status(`Tìm thấy ${items.length} địa điểm gần nhất:`);
     renderItems(items);
   }catch(e){
+    if(sig.aborted) return;
     console.error(e);
     status('Không tải được dữ liệu (máy chủ bản đồ quá tải hoặc mạng chậm). Bấm “Thử lại” hoặc thử bán kính nhỏ hơn.');
     $('results').innerHTML='<div class="loading">Không tải được dữ liệu.<br><button class="pill active" id="retryBtn" style="margin-top:10px">🔄 Thử lại</button></div>';
