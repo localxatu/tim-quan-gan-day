@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Test kết nối máy chủ bản đồ</title>
+<style>
+body{font-family:-apple-system,"Segoe UI",Roboto,Arial,sans-serif;max-width:600px;margin:0 auto;padding:20px;background:#141a26;color:#eef2f7}
+h2{font-size:20px;margin-bottom:6px}
+p{color:#93a0b8;font-size:14px;line-height:1.6}
+button{padding:13px 24px;font-size:16px;border:none;border-radius:12px;background:#ffb020;font-weight:800;color:#3d2b12;margin:12px 0}
+button:disabled{opacity:.5}
+.row{background:#1e2637;border-radius:12px;padding:12px 14px;margin:10px 0;font-size:14px;line-height:1.7}
+.ok{color:#6fd3a7;font-weight:700}
+.fail{color:#ff9a9a;font-weight:700}
+.mut{color:#93a0b8;font-size:12px}
+</style>
+</head>
+<body>
+<h2>🔧 Test kết nối máy chủ bản đồ</h2>
+<p>Mở file này bằng <b>đúng trình duyệt mày hay xài app tìm quán</b> (Chrome trên điện thoại là chuẩn nhất). Bấm nút, đợi khoảng 1 phút, rồi chụp màn hình kết quả gửi tao.</p>
+<button id="go">Bắt đầu test</button>
+<div id="out"></div>
+<script>
+const EPS=[
+  ['overpass-api.de (Đức)','https://overpass-api.de/api/interpreter'],
+  ['kumi.systems (Mỹ)','https://overpass.kumi.systems/api/interpreter'],
+  ['nchc (Đài Loan)','https://overpass.nchc.org.tw/api/interpreter'],
+];
+const Q='[out:json][timeout:10];node["amenity"="restaurant"](around:500,10.772,106.698);out 1;';
+const $=id=>document.getElementById(id);
+function row(name, cls, info){
+  const d=document.createElement('div');
+  d.className='row';
+  d.innerHTML='<span class="'+cls+'">'+(cls==='ok'?'✅':'❌')+'</span> <b>'+name+'</b><br><span class="mut">'+info+'</span>';
+  $('out').appendChild(d);
+}
+async function pingOverpass(name,url){
+  const t0=Date.now();
+  try{
+    const ctl=new AbortController();
+    const to=setTimeout(()=>ctl.abort(),20000);
+    const r=await fetch(url,{method:'POST',signal:ctl.signal,
+      headers:{'Content-Type':'application/x-www-form-urlencoded'},
+      body:'data='+encodeURIComponent(Q)});
+    clearTimeout(to);
+    const ms=((Date.now()-t0)/1000).toFixed(1)+'s';
+    if(!r.ok){ row(name,'fail','HTTP '+r.status+' sau '+ms); return; }
+    const j=await r.json();
+    row(name,'ok','OK sau '+ms+' — nhận '+(j.elements||[]).length+' kết quả');
+  }catch(e){
+    const ms=((Date.now()-t0)/1000).toFixed(1)+'s';
+    const m=String((e&&e.message)||'');
+    const why=(/abort/i.test(m)||e.name==='AbortError')?('timeout quá 20s (server chậm hoặc nghẽn) '+ms):('trình duyệt không kết nối được: '+m.slice(0,80)+' '+ms);
+    row(name,'fail',why);
+  }
+}
+async function pingNominatim(){
+  const t0=Date.now();
+  try{
+    const ctl=new AbortController();
+    const to=setTimeout(()=>ctl.abort(),15000);
+    const r=await fetch('https://nominatim.openstreetmap.org/search?format=json&limit=1&q=Ben%20Thanh',{signal:ctl.signal});
+    clearTimeout(to);
+    const j=await r.json();
+    row('nominatim (tìm địa chỉ)','ok','OK sau '+((Date.now()-t0)/1000).toFixed(1)+'s');
+  }catch(e){
+    row('nominatim (tìm địa chỉ)','fail','lỗi kết nối');
+  }
+}
+$('go').onclick=async()=>{
+  $('go').disabled=true;
+  $('out').innerHTML='';
+  for(const [n,u] of EPS){ await pingOverpass(n,u); }
+  await pingNominatim();
+  const d=document.createElement('div');
+  d.className='row';
+  d.innerHTML='<b>Xong.</b> Chụp màn hình này gửi tao nhé.';
+  $('out').appendChild(d);
+  $('go').disabled=false;
+};
+</script>
+</body>
+</html>
