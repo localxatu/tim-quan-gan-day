@@ -23,9 +23,9 @@ button:disabled{opacity:.5}
 <div id="out"></div>
 <script>
 const EPS=[
+  ['private.coffee','https://overpass.private.coffee/api/interpreter'],
   ['overpass-api.de (Đức)','https://overpass-api.de/api/interpreter'],
-  ['kumi.systems (Mỹ)','https://overpass.kumi.systems/api/interpreter'],
-  ['nchc (Đài Loan)','https://overpass.nchc.org.tw/api/interpreter'],
+  ['VK Maps (Nga)','https://maps.mail.ru/osm/tools/overpass/api/interpreter'],
 ];
 const Q='[out:json][timeout:10];node["amenity"="restaurant"](around:500,10.772,106.698);out 1;';
 const $=id=>document.getElementById(id);
